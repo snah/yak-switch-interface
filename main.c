@@ -41,16 +41,20 @@ void interrupt isr()
 void main()
 {
 	setup();
+    
+    send_state();
 
 	while (1)
 	{
 		if (usb_is_configured() && endpoint_ready())
 		{
-			t_state state = get_state();
-			send_state_if_changed(state);
+			send_state_if_changed();
 		}
 	}
 }
+
+unsigned char state[2];
+unsigned char last_state[2];
 
 void setup()
 {
@@ -65,34 +69,57 @@ void setup()
 	INTCONbits.GIE = 1;
     
 	// Setup pins.
+    ANSELA = 0;
+    TRISAbits.TRISA4 = 1;
+    TRISAbits.TRISA5 = 1;
+    
+    ANSELB = 0;
+    TRISBbits.TRISB4 = 1;
+    TRISBbits.TRISB5 = 1;
+    TRISBbits.TRISB6 = 1;
+    TRISBbits.TRISB7 = 1;
+    
     ANSELC = 0;
     TRISCbits.TRISC2 = 1;
+    TRISCbits.TRISC3 = 1;
+    TRISCbits.TRISC4 = 1;
+    TRISCbits.TRISC5 = 1;
+    TRISCbits.TRISC6 = 1;
+    TRISCbits.TRISC7 = 1;
 
 	usb_init();
+    
+    state[0] = 0;
+    state[1] = 0;
+    last_state[0] = 0xff;
+    last_state[1] = 0xff;
 }
 
-t_state get_state()
+
+void get_state()
 {
-	return PORTCbits.RC2;
+    state[0] = (PORTB & 0b11110000) >> 4;
+    state[1] = ((PORTA & 0b00110000) >> 4) | (PORTC & 0b11111100);
 }
 
-void send_state_if_changed(unsigned char state)
+void send_state_if_changed()
 {
-	static t_state last_state = 0xff;
-
-	if (state != last_state)
+    get_state();
+	if (state[0] != last_state[0] || state[1] != last_state[1])
 	{
-		send_state(state);
-		last_state = state;
+		send_state();
+		last_state[0] = state[0];
+        last_state[1] = state[1];
 	}
 }
 
-void send_state(t_state state)
+void send_state(void)
 {
 	unsigned char *buffer = usb_get_in_buffer(1);
 
-	buffer[0] = state;
-	usb_send_in_buffer(1, 1);
+	buffer[0] = state[0];
+    buffer[1] = state[1];
+	usb_send_in_buffer(1, 2);
 }
 
 bool endpoint_ready()
